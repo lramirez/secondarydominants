@@ -1,5 +1,7 @@
 from random import choice, random, shuffle, randint
 import sys
+from os import path
+from ray import tune
 import pandas as pd
 import numpy as np
 import torch
@@ -8,12 +10,25 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 class ChordLanguageModel:
-    def __init__(self, data_path):
+    def __init__(self, data_path, config, model_path=None):
         self.path = data_path
+        self.config = config
+        self.model_path = model_path
         self.make_dataset()
         self.split(0.8)
-        print(len(self.train))
-        print(len(self.test_x))
+        if self.model_path:
+            if path.exists(model_path):
+                print("loading model")
+                self.model = CLM(self.config['EMBED_DIM'], self.config['HIDDEN_DIM'], self.config['N_LAYERS'], self.vocab_size, 0.1)
+                self.model.load_state_dict(torch.load(self.model_path))
+            else:
+                print("training model")
+                self.train_model(self.config)
+                torch.save(self.model.state_dict(), self.model_path)
+        else:
+            print("no path given, training model")
+            self.train_model(self.config)
+
     def make_dataset(self):
         df = pd.read_csv(self.path)
         df.chords = df.chords.apply(lambda x: eval(x))
@@ -87,7 +102,10 @@ class ChordLanguageModel:
         x = torch.LongTensor(np.stack(x))
         lengths = list(lengths)
         return x, lengths
-
+    def get_model(self):
+        return self.model
+    def save_model(self, path):
+        torch.save(self.model.state_dict(), path)
     def evaluate(self, x):
         x, l = self.pack_eval_data(x)
         self.model.eval()
@@ -100,7 +118,12 @@ class ChordLanguageModel:
         probs = torch.gather(o, -1, idx).view(o.size(0),-1)
         return probs.sum(dim=1).numpy().tolist()
 
-    def train_model(self, config):
+    def hyperparameter_search(self, config):
+        analysis = tune.run(self._hp_search, config=config, verbose=1)
+    def _hp_search(self, config):
+        self.train_model(config=config, opt=True)
+
+    def train_model(self, config, opt=False):
         HIDDEN_DIM=config['HIDDEN_DIM']
         EMBED_DIM=config['EMBED_DIM']
         L2=config['L2']
@@ -122,21 +145,24 @@ class ChordLanguageModel:
             for BATCH in range(N_BATCHES):
                 x, y, lengths = self.get_minibatch(BATCH_SIZE, BATCH)
                 optimizer.zero_grad()
-                o=model(x, lengths)
+                o=model(x, lengths=lengths)
                 o = o.view(-1,o.size(2))
                 y = y.view(-1)
                 loss=loss_function(o, y)
                 loss.backward()
                 optimizer.step()
                 total_loss += loss
-            print("EPOCH "+str(epoch)+": "+str(total_loss))
+            print("EPOCH "+str(epoch)+": "+str(total_loss.item()))
             model.eval()
             with torch.no_grad():
-                test_o=model(self.test_x, self.test_lengths)
+                test_o=model(self.test_x, lengths=self.test_lengths)
                 test_o = test_o.view(-1,test_o.size(2))
                 test_y = self.test_y.view(-1)
                 test_loss=loss_function(test_o, test_y)
-                print("TEST LOSS: "+str(test_loss))
+                print("TEST LOSS: "+str(test_loss.item()))
+                if opt:
+                    tune.report(mean_loss=test_loss)
+
         print("DONE")
         self.model = model
 
@@ -151,12 +177,23 @@ class CLM(nn.Module):
         self.emb = nn.Embedding(vocab_size, emb_dim)
         self.LSTM = nn.LSTM(emb_dim, hidden_dim, n_layers, dropout=dropout, batch_first = True)
         self.out = nn.Linear(hidden_dim, vocab_size)
-    def forward(self, x, lengths):
-        l = x.size(1)
-        x = self.emb(x)
-        packed = nn.utils.rnn.pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
-        o, _ = self.LSTM(packed)
-        o = torch.nn.utils.rnn.pad_packed_sequence(o, batch_first=True, total_length = l)[0]
+    def forward(self, x, lengths=None, batch=True, state=None):
+        x_ = self.emb(x)
+        l=0
+        if batch:
+            l = x.size(1)
+            x_ = nn.utils.rnn.pack_padded_sequence(x_, lengths, batch_first=True, enforce_sorted=False)
+            o, _ = self.LSTM(x_)
+        else:
+            if x.size(0) == 1:
+                o, _ = self.LSTM(x_)
+            else:
+                o, _ = self.LSTM(x_, state)
+        if batch:
+            o = torch.nn.utils.rnn.pad_packed_sequence(o, batch_first=True, total_length = l)[0]
         o = self.out(o)
-        return F.log_softmax(o, dim=2)
+        if batch:
+            return F.log_softmax(o, dim=2)
+        else:
+            return F.log_softmax(o, dim=2), _
 
