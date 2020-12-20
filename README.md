@@ -6,7 +6,7 @@ This is a course project for Computational Creativity 2020.
 The system generates jazz tunes by first generating chord sequences, and then using the chord tones, bass and melody arpeggios on top.
 The chord sequences are generated using markov chains, the outputs of which are scored using a LSTM language model. Both are trained using (insert dataset name here).
 
-Our system uses a modified version of [pychord][https://github.com/yuma-m/pychord]. The library doesn't support certain chord qualities yet, so we had to add them ourselves.
+Our system uses a modified version of [pychord](https://github.com/yuma-m/pychord). The library doesn't support certain chord qualities yet, so we had to add them ourselves.
 
 Installation:
 1. Clone this repository
