@@ -14,3 +14,4 @@ Installation:
 3. Replace the file pychord/constants/qualities.py with our version of it.
 4. Run an enjoy. (TODO: finish this) We intend to implement audio artifact rendering to replace simple midi files. Meanwhile, we recommend using a DAW to play the midi files with instruments of choice. Or, give the text output of the chord sequences to autobop (TODO: add link), and watch the magic happen.
   
+The demos folder contains a few selected outputs of the system rendered to audio.
