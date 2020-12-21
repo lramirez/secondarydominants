@@ -11,8 +11,8 @@ Installation:
 1. Clone this repository
 2. Clone pychord
 3. Replace the file pychord/constants/qualities.py with our version of it.
-5. Copy the modified pychord into src/sdpychord.
-5. Run and enjoy. Usage: python JazzGenerator.py -o \<desired filename for the midi file>
+4. Copy the modified pychord into src/sdpychord.
+5. cd to src, run and enjoy. Usage: python JazzGenerator.py -o \<desired filename for the midi file>
 
 We intend to implement audio artifact rendering to replace simple midi files. Meanwhile, we recommend using a DAW to play the midi files with instruments of choice. Or, give the text output of the chord sequences to [Autobop](https://github.com/HajimeKawahara/autobop) and watch the magic happen.
   
