@@ -18,15 +18,14 @@ class ChordLanguageModel:
         self.split(0.8)
         if self.model_path:
             if path.exists(model_path):
-                print("loading model")
-                self.model = CLM(self.config['EMBED_DIM'], self.config['HIDDEN_DIM'], self.config['N_LAYERS'], self.vocab_size, 0.1)
+                self.model = CLM(self.config['EMBED_DIM'], self.config['HIDDEN_DIM'], self.config['N_LAYERS'], self.vocab_size)
                 self.model.load_state_dict(torch.load(self.model_path))
             else:
-                print("training model")
+                print("Training model, please have some coffee while waiting...")
                 self.train_model(self.config)
                 torch.save(self.model.state_dict(), self.model_path)
         else:
-            print("no path given, training model")
+            print("Training model, please have some coffee while waiting...")
             self.train_model(self.config)
 
     def make_dataset(self):
@@ -175,7 +174,7 @@ class CLM(nn.Module):
         self.vocab_size = vocab_size
 
         self.emb = nn.Embedding(vocab_size, emb_dim)
-        self.LSTM = nn.LSTM(emb_dim, hidden_dim, n_layers, dropout=dropout, batch_first = True)
+        self.LSTM = nn.LSTM(emb_dim, hidden_dim, n_layers, batch_first = True)
         self.out = nn.Linear(hidden_dim, vocab_size)
     def forward(self, x, lengths=None, batch=True, state=None):
         x_ = self.emb(x)

@@ -4,10 +4,6 @@ from sdpychord import pychord as pc
 import random
 NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-DATA_PATH = "../data/chords3.csv"
-MODEL_PATH = "../models/model.pt"
-CHAIN_ORDER = 3
-N_CANDIDATES = 10000
 tempo = 80
 bass_track = 0
 bass_channel = 0
@@ -17,11 +13,14 @@ melody_track = 2
 melody_channel = 2
 drum_track = 3
 drum_channel = 9
+string_track = 4 
+string_channel = 4
 num_tracks = 4
 volume   = 100
 chord_duration = 4
 bass_duration = 1
-arp_duration = 0.5
+arp_duration = 0.1
+string_duration = 4
 eight_times = [0, 0.15]
 chord_rhythms = [
         [(0, 4)],
@@ -63,23 +62,28 @@ def octave_down(note):
 def chord_rhythm():
     return chord_rhythms[random.randint(0, len(chord_rhythms)-1)]
 
-def render(chords, filename):
+def render(chords, filename, melody=None):
     chords = [pc.Chord(c) for c in chords]
+    if melody:
+        num_tracks = 5
     MIDI = MIDIFile(num_tracks)
 
     # Set sounds for instruments
     MIDI.addProgramChange(bass_track, bass_channel, 0, 32)
-    MIDI.addProgramChange(piano_track, piano_channel, 0, 0)
+    MIDI.addProgramChange(piano_track, piano_channel, 0, 4)
     MIDI.addProgramChange(melody_track, melody_channel, 0, 11)
+    if melody:
+        MIDI.addProgramChange(string_track, string_channel, 0, 59)
 
     for bar in range(len(chords)):
         chordtones = chords[bar].components_with_pitch(root_pitch=3)[1:]
         chordtones[-2] = octave_down(chordtones[-2])
-        basstones = chords[bar].components_with_pitch(root_pitch=1)[:3]
-        bt = chords[bar].components_with_pitch(root_pitch=1)[:2]
+        basstones = chords[bar].components_with_pitch(root_pitch=2)[:3]
+        bt = chords[bar].components_with_pitch(root_pitch=2)[:2]
         bt.reverse()
         basstones = basstones+bt
-        arp = Arpeggiate(chords[bar])
+        rev = random.random() < 0.5
+        arp = Arpeggiate(chords[bar], reverse=rev)
         
         for t, d in chord_rhythm():
             for ct in chordtones:
@@ -90,7 +94,8 @@ def render(chords, filename):
         for i in range(4):
             MIDI.addNote(bass_track, bass_channel, NoteToMidi(basstones[i]), bar*4 + i*bass_duration, bass_duration, volume)
         for i in range(8):
-            MIDI.addNote(melody_track, melody_channel, NoteToMidi(arp.__next__()), bar*4+i*0.5+eight_times[i%2], arp_duration, volume)
+            if random.random() < 0.7:
+                MIDI.addNote(melody_track, melody_channel, NoteToMidi(arp.__next__()), bar*4+i*0.5+eight_times[i%2], arp_duration, volume)
         # Ride symbal pattern
         for i in range(8):
             if i % 4 != 1:
@@ -98,6 +103,8 @@ def render(chords, filename):
         # Crash symbal in the first beat of each part
         if bar % 8 == 0:
             MIDI.addNote(drum_track, drum_channel, 49, bar*4, arp_duration, volume)
+        if melody:
+            MIDI.addNote(string_track, string_channel, melody[bar], bar*4, string_duration, volume)
     with open(filename, "wb") as output_file:
         MIDI.writeFile(output_file)    
 
@@ -107,7 +114,7 @@ class Arpeggiate:
         if reverse:
             ct.reverse()
         chordtones = [] + ct
-        rct = ct[:-1]
+        rct = ct[1:-1]
         rct.reverse()
         chordtones = chordtones+rct
         self.ct = chordtones
